@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { logger } from "@/lib/logger";
 
 // POST upload photos to gallery
 export async function POST(request: NextRequest) {
@@ -10,7 +11,13 @@ export async function POST(request: NextRequest) {
     const galleryId = formData.get("galleryId") as string;
     const files = formData.getAll("files") as File[];
 
+    logger.info("Photo upload started", {
+      galleryId,
+      fileCount: files.length,
+    });
+
     if (!galleryId) {
+      logger.warn("Photo upload failed: gallery ID missing");
       return NextResponse.json(
         { error: "Gallery ID is required" },
         { status: 400 }
@@ -18,6 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!files || files.length === 0) {
+      logger.warn("Photo upload failed: no files provided", { galleryId });
       return NextResponse.json(
         { error: "No files provided" },
         { status: 400 }
@@ -30,6 +38,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!gallery) {
+      logger.warn("Photo upload failed: gallery not found", { galleryId });
       return NextResponse.json(
         { error: "Gallery not found" },
         { status: 404 }
@@ -39,6 +48,7 @@ export async function POST(request: NextRequest) {
     // Create upload directory if not exists
     const uploadDir = path.join(process.cwd(), "public", "uploads", galleryId);
     await mkdir(uploadDir, { recursive: true });
+    logger.debug("Upload directory ready", { uploadDir });
 
     // Get current photo count for ordering
     const existingPhotos = await prisma.photo.count({
@@ -72,11 +82,21 @@ export async function POST(request: NextRequest) {
       });
 
       uploadedPhotos.push(photo);
+      logger.debug("Photo uploaded", {
+        photoId: photo.id,
+        filename: file.name,
+        size: buffer.length,
+      });
     }
+
+    logger.info("Photo upload completed", {
+      galleryId,
+      uploadedCount: uploadedPhotos.length,
+    });
 
     return NextResponse.json(uploadedPhotos, { status: 201 });
   } catch (error) {
-    console.error("Error uploading photos:", error);
+    logger.error("Failed to upload photos", error);
     return NextResponse.json(
       { error: "Failed to upload photos" },
       { status: 500 }
@@ -90,20 +110,28 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const photoId = searchParams.get("id");
 
+    logger.info("Photo deletion requested", { photoId });
+
     if (!photoId) {
+      logger.warn("Photo deletion failed: ID missing");
       return NextResponse.json(
         { error: "Photo ID is required" },
         { status: 400 }
       );
     }
 
-    await prisma.photo.delete({
+    const photo = await prisma.photo.delete({
       where: { id: photoId },
+    });
+
+    logger.info("Photo deleted successfully", {
+      photoId,
+      storagePath: photo.storagePath,
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error deleting photo:", error);
+    logger.error("Failed to delete photo", error, { photoId: request.url });
     return NextResponse.json(
       { error: "Failed to delete photo" },
       { status: 500 }

@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateAccessCode } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 // GET all galleries (admin)
 export async function GET() {
   try {
+    logger.debug("Fetching all galleries");
+
     const galleries = await prisma.gallery.findMany({
       include: {
         photos: true,
@@ -13,9 +16,10 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
+    logger.info("Galleries fetched successfully", { count: galleries.length });
     return NextResponse.json(galleries);
   } catch (error) {
-    console.error("Error fetching galleries:", error);
+    logger.error("Failed to fetch galleries", error);
     return NextResponse.json(
       { error: "Failed to fetch galleries" },
       { status: 500 }
@@ -28,7 +32,10 @@ export async function POST(request: NextRequest) {
   try {
     const { title, clientEmail, clientName } = await request.json();
 
+    logger.info("Creating new gallery", { title, clientEmail, clientName });
+
     if (!title) {
+      logger.warn("Gallery creation failed: title missing");
       return NextResponse.json(
         { error: "Title is required" },
         { status: 400 }
@@ -57,6 +64,7 @@ export async function POST(request: NextRequest) {
         create: { email: clientEmail, name: clientName },
       });
       clientId = client.id;
+      logger.debug("Client created/updated", { clientId, email: clientEmail });
     }
 
     // Set expiration to 1 year from now
@@ -76,9 +84,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    logger.info("Gallery created successfully", {
+      galleryId: gallery.id,
+      accessCode: gallery.accessCode,
+      title: gallery.title,
+    });
+
     return NextResponse.json(gallery, { status: 201 });
   } catch (error) {
-    console.error("Error creating gallery:", error);
+    logger.error("Failed to create gallery", error);
     return NextResponse.json(
       { error: "Failed to create gallery" },
       { status: 500 }
