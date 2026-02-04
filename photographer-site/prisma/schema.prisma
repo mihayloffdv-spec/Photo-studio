@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String
+  phone     String?
+  birthdate DateTime?
+  galleries Gallery[]
+  surveys   Survey[]
+  orders    Order[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Gallery {
+  id         String   @id @default(cuid())
+  client     Client?  @relation(fields: [clientId], references: [id])
+  clientId   String?
+  title      String
+  accessCode String   @unique
+  shareCode  String?  @unique
+  photos     Photo[]
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Photo {
+  id           String  @id @default(cuid())
+  gallery      Gallery @relation(fields: [galleryId], references: [id], onDelete: Cascade)
+  galleryId    String
+  filename     String
+  storagePath  String
+  thumbnailPath String?
+  order        Int     @default(0)
+  createdAt    DateTime @default(now())
+}
+
+model Survey {
+  id        String   @id @default(cuid())
+  client    Client?  @relation(fields: [clientId], references: [id])
+  clientId  String?
+  galleryId String?
+  answers   String   // JSON string for SQLite compatibility
+  createdAt DateTime @default(now())
+}
+
+model Order {
+  id        String   @id @default(cuid())
+  client    Client?  @relation(fields: [clientId], references: [id])
+  clientId  String?
+  type      String   // "storage_extension" | "ai_retouch" | "ai_generation" | "print"
+  amount    Int      // in cents
+  status    String   @default("pending") // "pending" | "paid" | "completed"
+  metadata  String?  // JSON string
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Portfolio photos (for the main showcase)
+model PortfolioPhoto {
+  id          String   @id @default(cuid())
+  category    String   // "wedding" | "portrait" | "family" | etc.
+  title       String?
+  description String?
+  storagePath String
+  thumbnailPath String?
+  order       Int      @default(0)
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
